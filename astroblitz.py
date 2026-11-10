@@ -61,10 +61,36 @@ def bonus(b, c):
             fill_rect(x + 3, y + 6, 4, 2, NOIR)
 
 
-def hud(score, vies, niv, triple):
+BCOL = (ROSE, ORANGE, ROUGE, VERT)
+
+
+def boss_draw(bo, niv, flash):
+    x, y = int(bo[0]), int(bo[1])
+    c = BLANC if flash else BCOL[(niv - 1) % 4]
+    fill_rect(x + 4, y, 32, 14, c)
+    fill_rect(x, y + 6, 40, 6, c)
+    fill_rect(x + 6, y + 14, 4, 8, c)
+    fill_rect(x + 30, y + 14, 4, 8, c)
+    fill_rect(x + 17, y + 14, 6, 6, c)
+    fill_rect(x + 12, y + 4, 5, 4, NOIR)
+    fill_rect(x + 23, y + 4, 5, 4, NOIR)
+
+
+def message(txt, col):
+    x = 160 - len(txt) * 5
+    draw_string(txt, x, 100, col, NOIR)
+    sleep(1.2)
+    fill_rect(x, 100, len(txt) * 10, 18, NOIR)
+
+
+def hud(score, vies, niv, triple, bo=None):
     fill_rect(0, 0, W, TOP, HUD)
     draw_string("SCORE " + str(score), 4, 1, BLANC, HUD)
-    draw_string("NIV " + str(niv), 140, 1, JAUNE, HUD)
+    if bo:
+        fill_rect(120, 5, 92, 8, GRIS)
+        fill_rect(120, 5, 92 * bo[2] // bo[3], 8, ROUGE)
+    else:
+        draw_string("NIV " + str(niv), 140, 1, JAUNE, HUD)
     for i in range(vies):
         fill_rect(250 + i * 14, 5, 10, 8, ROUGE)
     if triple > 0:
@@ -90,8 +116,9 @@ def title():
     ship(152, 75, CYAN)
     draw_string("Fleches : bouger", 80, 110, BLANC, NOIR)
     draw_string("OK / EXE : tirer", 80, 130, BLANC, NOIR)
-    draw_string("+ = triple tir   coeur = vie", 20, 150, JAUNE, NOIR)
-    draw_string("Record : " + str(record), 100, 175, VERT, NOIR)
+    draw_string("+ = triple tir   coeur = vie", 20, 145, JAUNE, NOIR)
+    draw_string("Un BOSS tous les 200 pts !", 30, 160, ROUGE, NOIR)
+    draw_string("Record : " + str(record), 100, 178, VERT, NOIR)
     draw_string("OK pour jouer", 95, 198, ORANGE, NOIR)
     return wait_key()
 
@@ -110,6 +137,10 @@ def play():
     hud(score, vies, niv, triple)
     dirty = False
     last = -1
+    bo = None  # boss : [x, y, pv, pv_max, direction, recharge]
+    bshots = []
+    seuil = 200
+    flash = 0
     while True:
         t0 = monotonic()
         if keydown(KEY_BACK):
@@ -124,6 +155,10 @@ def play():
             bonus(b, NOIR)
         for st in stars:
             fill_rect(st[0], st[1], 1, 1, NOIR)
+        if bo:
+            fill_rect(int(bo[0]), int(bo[1]), 40, 22, NOIR)
+        for s in bshots:
+            fill_rect(int(s[0]), int(s[1]), 4, 4, NOIR)
         # --- joueur ---
         if keydown(KEY_LEFT):
             px -= 5
@@ -155,11 +190,16 @@ def play():
             s[0] += s[2]
         shots = [s for s in shots if s[1] > TOP and 0 < s[0] < W - 2]
         # --- ennemis ---
-        spawn += 0.03 + niv * 0.012
+        if bo is None and score >= seuil:
+            bo = [140.0, float(TOP + 1), 25 + niv * 15, 25 + niv * 15, 1, 40]
+            message("ALERTE : BOSS !", ROUGE)
+            dirty = True
+        if bo is None:
+            spawn += 0.03 + niv * 0.012
         if spawn >= 1:
             spawn -= 1
             r = random()
-            t = 0 if r < 0.6 else (1 if r < 0.85 or niv < 3 else 2)
+            t = 0 if r < 0.6 else (1 if r < 0.85 or niv < 2 else 2)
             ew = ESIZE[t][0]
             sp = 1.0 + niv * 0.25 + random()
             if t == 2:
@@ -198,6 +238,63 @@ def play():
             alive.append(e)
         enemies = alive
         shots = [s for s in shots if s[1] > 0]
+        # --- boss ---
+        if flash > 0:
+            flash -= 1
+        if bo:
+            if bo[1] < TOP + 12:
+                bo[1] += 0.5
+            bo[0] += bo[4] * (1 + niv * 0.4)
+            if bo[0] < 0 or bo[0] > W - 40:
+                bo[4] = -bo[4]
+                bo[0] = max(0, min(W - 40, bo[0]))
+            bo[5] -= 1
+            if bo[5] <= 0:
+                bo[5] = max(14, 45 - niv * 5)
+                cx, cy = bo[0] + 18, bo[1] + 20
+                dx = (px + 7 - cx) / 60
+                dx = max(-2.5, min(2.5, dx))
+                bshots.append([cx, cy, dx, 3.0])
+                if niv >= 2:
+                    bshots.append([cx - 12, cy, dx - 1.2, 3.0])
+                    bshots.append([cx + 12, cy, dx + 1.2, 3.0])
+                if niv >= 3:
+                    bshots.append([cx, cy, dx, 4.5])
+            for s in shots:
+                if hit(s[0], s[1], 2, 6, bo[0], bo[1], 40, 22):
+                    s[1] = -99
+                    bo[2] -= 1
+                    flash = 2
+                    dirty = True
+            shots = [s for s in shots if s[1] > 0]
+            if bo[2] <= 0:
+                bx, by = int(bo[0]), int(bo[1])
+                for i in range(6):
+                    fill_rect(bx, by, 40, 22, JAUNE if i % 2 == 0 else ORANGE)
+                    sleep(0.08)
+                fill_rect(bx, by, 40, 22, NOIR)
+                for s in bshots:
+                    fill_rect(int(s[0]), int(s[1]), 4, 4, NOIR)
+                bshots = []
+                score += 100 * niv
+                bonuses.append([bo[0] + 5.0, bo[1], 0])
+                bonuses.append([bo[0] + 25.0, bo[1], 1])
+                bo = None
+                niv += 1
+                seuil = score + 200 + niv * 50
+                message("BOSS VAINCU ! NIVEAU " + str(niv), JAUNE)
+                dirty = True
+        keepb = []
+        for s in bshots:
+            s[0] += s[2]
+            s[1] += s[3]
+            if invul == 0 and hit(px, py, 15, 12, s[0], s[1], 4, 4):
+                vies -= 1
+                invul = 45
+                dirty = True
+            elif s[1] < H - 4 and 0 < s[0] < W - 4:
+                keepb.append(s)
+        bshots = keepb
         # --- bonus ---
         keep = []
         for b in bonuses:
@@ -213,12 +310,8 @@ def play():
                 keep.append(b)
         bonuses = keep
         # --- niveau / HUD ---
-        n = 1 + score // 200
-        if n != niv:
-            niv = n
-            dirty = True
         if dirty or score != last:
-            hud(score, vies, niv, triple)
+            hud(score, vies, niv, triple, bo)
             last = score
             dirty = False
         if vies <= 0:
@@ -236,6 +329,10 @@ def play():
             enemy(e, ECOL[e[2]])
         for s in shots:
             fill_rect(int(s[0]), int(s[1]), 2, 6, JAUNE)
+        if bo:
+            boss_draw(bo, niv, flash > 0)
+        for s in bshots:
+            fill_rect(int(s[0]), int(s[1]), 4, 4, ORANGE)
         if invul == 0 or invul % 6 < 3:
             ship(int(px), int(py), CYAN)
         dt = 0.033 - (monotonic() - t0)

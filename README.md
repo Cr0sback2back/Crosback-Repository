@@ -14,7 +14,12 @@ Jeu de tir spatial pour calculatrice NumWorks : `astroblitz.py`.
 - OK / EXE : tirer
 - Retour : quitter
 
-**Ennemis :** rouge = rôdeur (10 pts), rose = zigzag (15 pts), vert = tank à 2 PV (30 pts, dès le niveau 3).
-Un ennemi qui passe en bas te coûte 5 points. Le niveau monte tous les 200 points.
+**Ennemis :** rouge = rôdeur (10 pts), rose = zigzag (15 pts), vert = tank à 2 PV (30 pts, dès le niveau 2).
+Un ennemi qui passe en bas te coûte 5 points.
+
+**Boss de fin de niveau :** à 200 points, un boss arrive (« ALERTE : BOSS ! »). Les ennemis normaux
+arrêtent d'apparaître, sa barre de vie s'affiche en haut et il te tire dessus en visant ton vaisseau.
+Battre le boss rapporte 100 × niveau points, lâche un triple tir et une vie, et fait passer au niveau suivant.
+À chaque niveau, le boss a plus de PV, bouge plus vite et tire plus (3 tirs en éventail dès le niveau 2).
 
 **Bonus :** bleu `+` = triple tir pendant ~10 s, rouge = une vie en plus (max 5).
